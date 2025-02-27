@@ -1,0 +1,96 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+env/
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Docker
+.dockerignore
+
+# Terraform
+.terraform/
+terraform.tfstate
+terraform.tfstate.backup
+*.tfvars
+.terragrunt-cache/
+
+# MinIO data
+minio-data/
+
+# Airflow
+airflow.db
+airflow.cfg
+logs/
+airflow-webserver.pid
+webserver_config.py
+
+# PySpark
+metastore_db/
+spark-warehouse/
+derby.log
+
+# Meshroom
+cache/
+meshroom_data/
+
+# Data (raw and processed)
+data/raw_videos/
+data/frames/
+data/processed_frames/
+data/models/
+
+# Logs
+*.log
+
+# Secrets
+.env
+.aws/
+.kube/
+credentials.json
+
+# Great Expectations
+great_expectations/uncommitted/
+
+# macOS
+.DS_Store
+
+# Evidently AI reports
+monitoring/reports/
+
+# Temporary files
+tmp/
+temp/ 
+
+roadmap.md
