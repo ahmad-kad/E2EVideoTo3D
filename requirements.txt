@@ -29,7 +29,7 @@ docker>=6.1.0
 
 # Database
 psycopg2-binary>=2.9.6
-sqlalchemy>=2.0.15
+sqlalchemy>=1.4.36,<2.0.0
 
 # Development and testing
 pytest>=7.3.1
