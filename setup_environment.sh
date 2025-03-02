@@ -24,27 +24,55 @@ if [ ! -f "/root/.mc/config.json" ]; then
     mc config host add myminio http://minio:9000 minioadmin minioadmin
 fi
 
-# Verify Meshroom is available
-if command -v meshroom_batch &> /dev/null; then
-    echo "Meshroom found at: $(which meshroom_batch)"
-else
-    echo "WARNING: Meshroom not found in PATH. Checking installation..."
+# Verify Meshroom is available and fix symbolic links if needed
+echo "Checking Meshroom installation..."
+
+# Always recreate Meshroom symlinks to ensure they're correct
+echo "Setting up Meshroom symbolic links..."
+# Find Meshroom installation directory
+MESHROOM_DIR=$(find /opt/meshroom -type d -name "Meshroom*" | head -n 1)
+
+if [ -n "$MESHROOM_DIR" ]; then
+    echo "Found Meshroom directory: $MESHROOM_DIR"
     
-    # Try to locate Meshroom executable
-    MESHROOM_PATH=$(find /opt/meshroom -name "meshroom_batch" -type f | head -n 1)
-    
-    if [ -n "$MESHROOM_PATH" ]; then
-        echo "Found Meshroom at: $MESHROOM_PATH"
-        echo "Creating symlink..."
-        ln -sf "$MESHROOM_PATH" /usr/local/bin/meshroom_batch
-        ln -sf "$MESHROOM_PATH" /usr/local/bin/meshroom_batch_cpu
+    # Check if meshroom_batch exists
+    if [ -f "${MESHROOM_DIR}/meshroom_batch" ]; then
+        echo "Creating symbolic links for Meshroom executables..."
+        ln -sf "${MESHROOM_DIR}/meshroom_batch" /usr/local/bin/meshroom_batch
+        ln -sf "${MESHROOM_DIR}/meshroom_batch" /usr/local/bin/meshroom_batch_cpu
+        echo "Meshroom symbolic links created:"
+        ls -la /usr/local/bin/meshroom_batch*
+        
+        # Test Meshroom availability
+        echo "Testing Meshroom installation:"
+        if /usr/local/bin/meshroom_batch --help > /dev/null; then
+            echo "✅ Meshroom is properly installed and working"
+        else
+            echo "⚠️ Meshroom installation check failed. Please check the logs."
+        fi
     else
-        echo "ERROR: Meshroom executable not found. Please check installation."
+        echo "❌ ERROR: meshroom_batch not found in ${MESHROOM_DIR}"
+        echo "Searching for meshroom_batch in entire /opt directory..."
+        MESHROOM_PATH=$(find /opt -name "meshroom_batch" -type f | head -n 1)
+        
+        if [ -n "$MESHROOM_PATH" ]; then
+            echo "Found alternative Meshroom location: $MESHROOM_PATH"
+            ln -sf "$MESHROOM_PATH" /usr/local/bin/meshroom_batch
+            ln -sf "$MESHROOM_PATH" /usr/local/bin/meshroom_batch_cpu
+            echo "Created alternative symbolic links"
+        else
+            echo "❌ ERROR: Could not find meshroom_batch executable anywhere in /opt"
+        fi
     fi
+else
+    echo "❌ ERROR: Meshroom directory not found in /opt/meshroom"
+    echo "Available content in /opt/meshroom:"
+    ls -la /opt/meshroom || echo "Directory doesn't exist"
 fi
 
 # Create necessary directories
 mkdir -p /app/logs
 
 # Execute the provided command or default command
+echo "Environment setup complete. Starting application..."
 exec "$@"

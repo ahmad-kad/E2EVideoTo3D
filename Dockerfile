@@ -75,19 +75,27 @@ RUN mkdir -p /opt/meshroom && \
     rm Meshroom-${MESHROOM_VERSION}-linux-cuda10.tar.gz
 
 # Create proper symbolic links for Meshroom executables
-RUN if [ -d "/opt/meshroom/Meshroom-${MESHROOM_VERSION}-linux-cuda10" ]; then \
-      ln -sf /opt/meshroom/Meshroom-${MESHROOM_VERSION}-linux-cuda10/meshroom_batch /usr/local/bin/meshroom_batch; \
-    elif [ -d "/opt/meshroom/Meshroom-${MESHROOM_VERSION}-cuda10" ]; then \
-      ln -sf /opt/meshroom/Meshroom-${MESHROOM_VERSION}-cuda10/meshroom_batch /usr/local/bin/meshroom_batch; \
+# Updated to handle the actual directory structure that exists after extraction
+RUN echo "Inspecting Meshroom directory:" && \
+    ls -la /opt/meshroom/ && \
+    MESHROOM_DIR=$(find /opt/meshroom -type d -name "Meshroom*" | head -n 1) && \
+    echo "Found Meshroom directory: ${MESHROOM_DIR}" && \
+    if [ -f "${MESHROOM_DIR}/meshroom_batch" ]; then \
+      ln -sf ${MESHROOM_DIR}/meshroom_batch /usr/local/bin/meshroom_batch && \
+      ln -sf ${MESHROOM_DIR}/meshroom_batch /usr/local/bin/meshroom_batch_cpu && \
+      echo "Created symbolic links for Meshroom executables" && \
+      ls -la /usr/local/bin/meshroom_batch*; \
+    else \
+      echo "Error: meshroom_batch not found in ${MESHROOM_DIR}"; \
+      exit 1; \
     fi
-
-# Create CPU-specific symlink
-RUN ln -sf $(which meshroom_batch) /usr/local/bin/meshroom_batch_cpu
 
 # Verify Meshroom installation
 RUN echo "Meshroom installation paths:" && \
-    find /opt/meshroom -name meshroom_batch -type f || echo "Not found" && \
-    ls -la /usr/local/bin/meshroom_batch* || echo "No symlinks created"
+    find /opt/meshroom -name meshroom_batch -type f && \
+    ls -la /usr/local/bin/meshroom_batch* && \
+    echo "Testing Meshroom:" && \
+    /usr/local/bin/meshroom_batch --help | head -n 5
 
 # Copy project code
 COPY . .
