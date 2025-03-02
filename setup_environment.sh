@@ -1,36 +1,50 @@
 #!/bin/bash
 set -e
 
-MESHROOM_VERSION="2021.1.0"
+echo "Initializing environment..."
 
-# Check if NVIDIA GPU is available
-if command -v nvidia-smi &> /dev/null && nvidia-smi &> /dev/null; then
-    echo "NVIDIA GPU detected, setting up GPU environment..."
+# Check if CUDA is available
+if command -v nvidia-smi &> /dev/null; then
+    echo "NVIDIA GPU detected - using GPU acceleration."
+    export CUDA_VISIBLE_DEVICES=0
     
-    # Check if the GPU version of Meshroom is already downloaded
-    if [ ! -f "/usr/local/bin/meshroom_batch_gpu" ]; then
-        echo "Downloading GPU version of Meshroom..."
-        cd /opt/meshroom
-        # Try to download CUDA version if available
-        if wget -q --spider "https://github.com/alicevision/meshroom/releases/download/v${MESHROOM_VERSION}/Meshroom-${MESHROOM_VERSION}-linux-cuda10.tar.gz"; then
-            wget -q "https://github.com/alicevision/meshroom/releases/download/v${MESHROOM_VERSION}/Meshroom-${MESHROOM_VERSION}-linux-cuda10.tar.gz"
-            tar -xzf Meshroom-${MESHROOM_VERSION}-linux-cuda10.tar.gz
-            rm Meshroom-${MESHROOM_VERSION}-linux-cuda10.tar.gz
-            ln -s /opt/meshroom/Meshroom-${MESHROOM_VERSION}-cuda10/meshroom_batch /usr/local/bin/meshroom_batch_gpu
-        else
-            echo "GPU version not found, falling back to CPU version for GPU operations"
-            ln -s /usr/local/bin/meshroom_batch_cpu /usr/local/bin/meshroom_batch_gpu
-        fi
+    # Install CUDA packages if needed
+    if ! pip3 list | grep -q "torch"; then
+        echo "Installing PyTorch with CUDA support..."
+        pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
     fi
-    
-    # Set GPU environment variables
-    export USE_GPU=1
-    export MESHROOM_BINARY="meshroom_batch_gpu"
 else
-    echo "No NVIDIA GPU detected, using CPU mode..."
-    export USE_GPU=0
-    export MESHROOM_BINARY="meshroom_batch_cpu"
+    echo "No NVIDIA GPU detected - using CPU mode."
+    export CUDA_VISIBLE_DEVICES=""
 fi
 
-echo "Environment setup complete"
+# Configure MinIO client
+if [ ! -f "/root/.mc/config.json" ]; then
+    echo "Configuring MinIO client..."
+    mc config host add myminio http://minio:9000 minioadmin minioadmin
+fi
+
+# Verify Meshroom is available
+if command -v meshroom_batch &> /dev/null; then
+    echo "Meshroom found at: $(which meshroom_batch)"
+else
+    echo "WARNING: Meshroom not found in PATH. Checking installation..."
+    
+    # Try to locate Meshroom executable
+    MESHROOM_PATH=$(find /opt/meshroom -name "meshroom_batch" -type f | head -n 1)
+    
+    if [ -n "$MESHROOM_PATH" ]; then
+        echo "Found Meshroom at: $MESHROOM_PATH"
+        echo "Creating symlink..."
+        ln -sf "$MESHROOM_PATH" /usr/local/bin/meshroom_batch
+        ln -sf "$MESHROOM_PATH" /usr/local/bin/meshroom_batch_cpu
+    else
+        echo "ERROR: Meshroom executable not found. Please check installation."
+    fi
+fi
+
+# Create necessary directories
+mkdir -p /app/logs
+
+# Execute the provided command or default command
 exec "$@"

@@ -67,17 +67,31 @@ RUN pip3 install --no-cache-dir --use-pep517 -r requirements.txt || echo "Some p
 COPY setup_environment.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/setup_environment.sh
 
-# Download and install Meshroom
+# Download and install Meshroom with corrected path structure
 RUN mkdir -p /opt/meshroom && \
     cd /opt/meshroom && \
     wget -q "https://github.com/alicevision/meshroom/releases/download/v${MESHROOM_VERSION}/Meshroom-${MESHROOM_VERSION}-linux-cuda10.tar.gz" && \
     tar -xzf Meshroom-${MESHROOM_VERSION}-linux-cuda10.tar.gz && \
-    rm Meshroom-${MESHROOM_VERSION}-linux-cuda10.tar.gz && \
-    ln -s /opt/meshroom/Meshroom-${MESHROOM_VERSION}-cuda10/meshroom_batch /usr/local/bin/meshroom_batch_cpu
+    rm Meshroom-${MESHROOM_VERSION}-linux-cuda10.tar.gz
 
-    # Copy project code
+# Create proper symbolic links for Meshroom executables
+RUN if [ -d "/opt/meshroom/Meshroom-${MESHROOM_VERSION}-linux-cuda10" ]; then \
+      ln -sf /opt/meshroom/Meshroom-${MESHROOM_VERSION}-linux-cuda10/meshroom_batch /usr/local/bin/meshroom_batch; \
+    elif [ -d "/opt/meshroom/Meshroom-${MESHROOM_VERSION}-cuda10" ]; then \
+      ln -sf /opt/meshroom/Meshroom-${MESHROOM_VERSION}-cuda10/meshroom_batch /usr/local/bin/meshroom_batch; \
+    fi
+
+# Create CPU-specific symlink
+RUN ln -sf $(which meshroom_batch) /usr/local/bin/meshroom_batch_cpu
+
+# Verify Meshroom installation
+RUN echo "Meshroom installation paths:" && \
+    find /opt/meshroom -name meshroom_batch -type f || echo "Not found" && \
+    ls -la /usr/local/bin/meshroom_batch* || echo "No symlinks created"
+
+# Copy project code
 COPY . .
 
 # Entry point will check environment and set up accordingly
 ENTRYPOINT ["/usr/local/bin/setup_environment.sh"]
-CMD ["python3", "-m"]
+CMD ["python3", "-m", "src.main"]
