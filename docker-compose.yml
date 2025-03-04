@@ -87,12 +87,19 @@ services:
   photogrammetry:
     build:
       context: .
+      args:
+        - BUILDPLATFORM=${BUILDPLATFORM:-linux/amd64}
     volumes:
       - .:/app
       - ./minio-data:/data
     depends_on:
       - minio
+    platform: ${COMPOSE_DOCKER_CLI_BUILD_PLATFORM:-linux/amd64}
     command: tail -f /dev/null
+    environment:
+      - PYTHONPATH=/app
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
     deploy:
       resources:
         reservations:

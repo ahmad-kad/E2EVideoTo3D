@@ -28,6 +28,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config \
     libpq-dev \
     curl \
+    # Add dependencies for pyarrow and re2
+    cmake \
+    libssl-dev \
+    libre2-dev \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -40,15 +44,17 @@ WORKDIR /app
 # Install dependencies in groups to isolate issues
 COPY requirements.txt .
 
-# Core and data handling packages first
+# Install PyArrow first with specific version that has pre-built wheels
+RUN pip3 install --no-cache-dir pyarrow==11.0.0
+
+# Core and data handling packages 
 RUN pip3 install --no-cache-dir \
     opencv-python>=4.7.0 \
     numpy>=1.22.0 \
     pillow>=9.4.0 \
     boto3>=1.26.0 \
     s3fs>=2023.3.0 \
-    pandas>=1.5.0 \
-    pyarrow>=12.0.0
+    pandas>=1.5.0
 
 # Database packages
 RUN pip3 install --no-cache-dir \
@@ -59,6 +65,9 @@ RUN pip3 install --no-cache-dir \
 RUN pip3 install --no-cache-dir \
     pyspark>=3.4.0 \
     findspark>=2.0.1
+
+# Install google-re2 with specific version
+RUN pip3 install --no-cache-dir google-re2==1.0.0
 
 # Install the rest with relaxed constraints
 RUN pip3 install --no-cache-dir --use-pep517 -r requirements.txt || echo "Some packages failed to install"

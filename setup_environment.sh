@@ -3,6 +3,25 @@ set -e
 
 echo "Initializing environment..."
 
+# Get OS platform
+PLATFORM=$(uname -s)
+echo "Running on platform: $PLATFORM"
+
+# Install platform-specific packages if needed
+if [ "$PLATFORM" = "Darwin" ]; then
+    echo "macOS detected - applying macOS-specific configurations..."
+    
+    # Check if any problematic packages need reinstall
+    if ! pip3 list | grep -q "pyarrow" || ! pip3 list | grep -q "google-re2"; then
+        echo "Reinstalling potentially problematic packages for macOS..."
+        # Install pyarrow with specific options for macOS
+        pip3 install --no-build-isolation --force-reinstall pyarrow==11.0.0
+        
+        # Install google-re2 with pre-built wheel if available
+        pip3 install --no-build-isolation --force-reinstall google-re2==1.0.0
+    fi
+fi
+
 # Check if CUDA is available
 if command -v nvidia-smi &> /dev/null; then
     echo "NVIDIA GPU detected - using GPU acceleration."
