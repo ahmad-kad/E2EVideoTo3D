@@ -1,12 +1,14 @@
 services:
   airflow-webserver:
     image: apache/airflow:2.6.3
+    platform: ${DOCKER_PLATFORM:-linux/arm64}
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags
       - AIRFLOW__WEBSERVER__EXPOSE_CONFIG=True
+      - AIRFLOW__CORE__FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/plugins:/opt/airflow/plugins
@@ -14,7 +16,8 @@ services:
     ports:
       - "8080:8080"
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     command: webserver
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
@@ -24,21 +27,51 @@ services:
 
   airflow-scheduler:
     image: apache/airflow:2.6.3
+    platform: ${DOCKER_PLATFORM:-linux/arm64}
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags
+      - AIRFLOW__CORE__FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/plugins:/opt/airflow/plugins
       - ./airflow/logs:/opt/airflow/logs
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
+      airflow-webserver:
+        condition: service_started
     command: scheduler
+
+  airflow-init:
+    image: apache/airflow:2.6.3
+    platform: ${DOCKER_PLATFORM:-linux/arm64}
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags
+      - AIRFLOW__CORE__FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/plugins:/opt/airflow/plugins
+      - ./airflow/logs:/opt/airflow/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      bash -c "
+        airflow db init &&
+        airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com &&
+        echo 'Airflow initialized successfully'
+      "
+    restart: "no"
 
   postgres:
     image: postgres:15-alpine
+    platform: ${DOCKER_PLATFORM:-linux/arm64}
     environment:
       - POSTGRES_USER=airflow
       - POSTGRES_PASSWORD=airflow
@@ -55,6 +88,7 @@ services:
 
   minio:
     image: minio/minio:RELEASE.2023-10-25T06-33-25Z
+    platform: ${DOCKER_PLATFORM:-linux/arm64}
     command: server /data --console-address ":9001"
     environment:
       - MINIO_ROOT_USER=minioadmin
@@ -72,6 +106,7 @@ services:
 
   minio-init:
     image: minio/mc
+    platform: ${DOCKER_PLATFORM:-linux/arm64}
     depends_on:
       - minio
     entrypoint: >
@@ -87,29 +122,30 @@ services:
   photogrammetry:
     build:
       context: .
+      dockerfile: Dockerfile.colmap
       args:
-        - BUILDPLATFORM=${BUILDPLATFORM:-linux/amd64}
+        - BASE_IMAGE=${BASE_IMAGE:-ubuntu:20.04}
+    platform: ${DOCKER_PLATFORM:-linux/arm64}
     volumes:
       - .:/app
       - ./minio-data:/data
+      - ./data:/app/data
     depends_on:
       - minio
-    platform: ${COMPOSE_DOCKER_CLI_BUILD_PLATFORM:-linux/amd64}
-    command: tail -f /dev/null
     environment:
-      - PYTHONPATH=/app
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+      - USE_GPU=${USE_GPU:-false}
+    # For NVIDIA systems, uncomment the following:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
 
   spark-master:
     image: bitnami/spark:3.4.1
+    platform: ${DOCKER_PLATFORM:-linux/arm64}
     environment:
       - SPARK_MODE=master
       - SPARK_RPC_AUTHENTICATION_ENABLED=no
@@ -122,6 +158,7 @@ services:
 
   spark-worker:
     image: bitnami/spark:3.4.1
+    platform: ${DOCKER_PLATFORM:-linux/arm64}
     environment:
       - SPARK_MODE=worker
       - SPARK_MASTER_URL=spark://spark-master:7077

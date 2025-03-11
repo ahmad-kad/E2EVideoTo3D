@@ -1,5 +1,25 @@
+# Python dependencies
+apache-airflow==2.6.3
+apache-airflow-providers-docker==3.7.0
+minio==7.1.15
+numpy==1.24.3
+opencv-python==4.7.0.72
+pillow==9.5.0
+pyspark==3.4.1
+greatexpectations==0.15.50
+dbt-core==1.5.0
+psycopg2-binary==2.9.6
+evidently==0.4.1
+
+# Note: For video processing, FFmpeg is required. 
+# Install with your system package manager:
+# - macOS: brew install ffmpeg
+# - Ubuntu/Debian: sudo apt-get install ffmpeg
+# - Windows: choco install ffmpeg (with Chocolatey) or follow instructions at https://ffmpeg.org/download.html
+#
+# Alternatively, use the provided docker_video_process.sh script which doesn't require local FFmpeg installation.
+
 # Core dependencies
-opencv-python>=4.7.0
 numpy>=1.22.0
 pillow>=9.4.0
 
@@ -10,25 +30,21 @@ pandas>=1.5.0
 pyarrow>=12.0.0
 
 # Distributed processing
-pyspark>=3.4.0
 findspark>=2.0.1
 
 # Pipeline orchestration
-apache-airflow>=2.6.3
 apache-airflow-providers-amazon>=7.3.0
 apache-airflow-providers-google>=10.0.0
 apache-airflow-providers-cncf-kubernetes>=5.1.0
 
 # Data validation and monitoring
 great-expectations>=0.17.0
-evidently>=0.4.0
 
 # Infrastructure
 kubernetes>=27.2.0
 docker>=6.1.0
 
 # Database
-psycopg2-binary>=2.9.6
 sqlalchemy>=1.4.36,<2.0.0
 
 # Development and testing

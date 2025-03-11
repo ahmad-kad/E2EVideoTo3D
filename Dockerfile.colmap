@@ -1,0 +1,131 @@
+ARG BASE_IMAGE=ubuntu:20.04
+FROM ${BASE_IMAGE} as builder
+
+# Prevent interactive prompts during build
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install COLMAP dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    cmake \
+    build-essential \
+    libboost-program-options-dev \
+    libboost-filesystem-dev \
+    libboost-graph-dev \
+    libboost-system-dev \
+    libboost-test-dev \
+    libeigen3-dev \
+    libflann-dev \
+    libfreeimage-dev \
+    libmetis-dev \
+    libgoogle-glog-dev \
+    libgflags-dev \
+    libsqlite3-dev \
+    libglew-dev \
+    qtbase5-dev \
+    libqt5opengl5-dev \
+    libcgal-dev \
+    libceres-dev \
+    python3 \
+    python3-pip \
+    ffmpeg \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Clone COLMAP
+WORKDIR /opt
+RUN git clone https://github.com/colmap/colmap.git
+WORKDIR /opt/colmap
+RUN git checkout 3.7
+RUN mkdir build
+WORKDIR /opt/colmap/build
+
+# Check architecture and CUDA availability, limit parallelism to avoid memory exhaustion
+RUN ARCH=$(uname -m); \
+    # Calculate build cores - use 2 cores on ARM, or half of available on other platforms with minimum of 2
+    if [ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]; then \
+        BUILD_CORES=2; \
+    else \
+        TOTAL_CORES=$(nproc); \
+        BUILD_CORES=$(( TOTAL_CORES / 2 > 2 ? TOTAL_CORES / 2 : 2 )); \
+    fi; \
+    echo "Building with $BUILD_CORES cores"; \
+    \
+    # Set up CUDA options
+    CUDA_ENABLED=OFF; \
+    if [ "$ARCH" = "x86_64" ] && [ -e /usr/local/cuda ]; then \
+        echo "Building with CUDA support for x86_64"; \
+        CUDA_ENABLED=ON; \
+        CMAKE_OPTIONS="-DCMAKE_BUILD_TYPE=Release -DCUDA_ENABLED=ON -DCUDA_ARCHS=all"; \
+    else \
+        echo "Building without CUDA support"; \
+        CMAKE_OPTIONS="-DCMAKE_BUILD_TYPE=Release -DCUDA_ENABLED=OFF"; \
+    fi; \
+    \
+    # Build with memory optimizations
+    export CXXFLAGS="-O2 -g0"; \
+    cmake .. $CMAKE_OPTIONS && \
+    make -j$BUILD_CORES && \
+    make install
+
+# Start with a clean image
+FROM ${BASE_IMAGE}
+
+# Prevent interactive prompts
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install runtime dependencies - using more generic package names
+RUN apt-get update && apt-get install -y \
+    libboost-program-options1.71.0 \
+    libboost-filesystem1.71.0 \
+    libboost-graph1.71.0 \
+    libboost-system1.71.0 \
+    libboost-test1.71.0 \
+    libeigen3-dev \
+    libflann1.9 \
+    libfreeimage3 \
+    libmetis5 \
+    libgoogle-glog0v5 \
+    libgflags2.2 \
+    libsqlite3-0 \
+    libglew2.1 \
+    libqt5core5a \
+    libqt5opengl5 \
+    libcgal-dev \
+    libceres1 \
+    python3 \
+    python3-pip \
+    curl \
+    ffmpeg \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy COLMAP binaries from the builder stage
+COPY --from=builder /usr/local/bin/colmap /usr/local/bin/colmap
+
+# Create necessary directories
+RUN mkdir -p /app/data/input
+RUN mkdir -p /app/data/output
+RUN mkdir -p /app/data/videos
+RUN mkdir -p /app/scripts
+
+# Set working directory
+WORKDIR /app
+
+# Set environment variable for GPU usage (can be overridden at runtime)
+ENV USE_GPU=false
+
+# Copy the run script directly to /app
+COPY scripts/run_colmap.sh /app/
+COPY scripts/video_to_frames.sh /app/
+RUN chmod +x /app/*.sh
+
+# Create a backup shell script in case the original is missing
+RUN echo '#!/bin/bash' > /app/fallback.sh && \
+    echo 'echo "Warning: Using fallback script instead of run_colmap.sh"' >> /app/fallback.sh && \
+    echo 'echo "Please check that your scripts directory contains run_colmap.sh"' >> /app/fallback.sh && \
+    echo 'sleep infinity' >> /app/fallback.sh && \
+    chmod +x /app/fallback.sh
+
+# Check if the script exists and use fallback if not
+ENTRYPOINT ["/bin/bash", "-c", "if [ -f /app/run_colmap.sh ]; then exec /app/run_colmap.sh; else exec /app/fallback.sh; fi"] 
