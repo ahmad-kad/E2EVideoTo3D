@@ -484,7 +484,7 @@ EOL
     docker-compose up -d
 else
     # Standard build
-    docker-compose build --no-cache photogrammetry
+    docker-compose build
     
     # Start all services
     echo "Starting all services..."
@@ -504,7 +504,7 @@ docker-compose ps
 
 echo ""
 echo "Access your services at:"
-echo "  - Airflow: http://localhost:8080 (username: admin, password: admin)"
+echo "  - Airflow: http://127.0.0.1:8080 or http://localhost:8080 (username: admin, password: admin)"
 echo "  - MinIO: http://localhost:9000 (console: http://localhost:9001)"
 echo "  - Spark Master UI: http://localhost:8001"
 echo ""
