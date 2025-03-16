@@ -8,15 +8,17 @@ import os
 import sys
 import logging
 import subprocess
+import glob
 
 # Configure paths
-PROJECT_PATH = os.environ.get('PROJECT_PATH', '/app/data')
+PROJECT_PATH = os.environ.get('PROJECT_PATH', '/opt/airflow/data')
 INPUT_PATH = os.path.join(PROJECT_PATH, 'input')
 OUTPUT_PATH = os.path.join(PROJECT_PATH, 'output')
 COLMAP_PATH = os.environ.get('COLMAP_PATH', 'colmap')  # Path to COLMAP executable
 
 # Ensure output directory exists
 os.makedirs(OUTPUT_PATH, exist_ok=True)
+os.makedirs(INPUT_PATH, exist_ok=True)
 
 # Function to check if GPU is available
 def is_gpu_available():
@@ -49,6 +51,48 @@ dag = DAG(
     tags=['3d', 'reconstruction', 'colmap'],
 )
 
+# Check for video files and extract frames if needed
+def check_and_extract_video(**kwargs):
+    video_dir = os.path.join(PROJECT_PATH, 'videos')
+    frames_dir = INPUT_PATH
+    
+    # Check if there are already frames in the input directory
+    existing_frames = glob.glob(os.path.join(frames_dir, '*.jpg')) + glob.glob(os.path.join(frames_dir, '*.png'))
+    if existing_frames:
+        logging.info(f"Found {len(existing_frames)} existing frames in {frames_dir}. Skipping video extraction.")
+        return True
+    
+    # Look for video files
+    video_files = glob.glob(os.path.join(video_dir, '*.mp4')) + glob.glob(os.path.join(video_dir, '*.mov'))
+    if not video_files:
+        logging.warning(f"No video files found in {video_dir}. Please add a video file or frames directly to the input directory.")
+        return False
+    
+    # Use the first video file found
+    video_file = video_files[0]
+    logging.info(f"Found video file: {video_file}")
+    
+    # Extract frames using the extract_video.sh script
+    extract_script = os.path.join(os.path.dirname(PROJECT_PATH), 'scripts', 'extract_video.sh')
+    if os.path.exists(extract_script):
+        cmd = f"bash {extract_script} {video_file}"
+        logging.info(f"Running command: {cmd}")
+        return_code = os.system(cmd)
+        
+        if return_code != 0:
+            raise Exception("Video extraction failed")
+        
+        # Verify frames were extracted
+        extracted_frames = glob.glob(os.path.join(frames_dir, '*.jpg')) + glob.glob(os.path.join(frames_dir, '*.png'))
+        if not extracted_frames:
+            raise Exception(f"No frames were extracted to {frames_dir}")
+        
+        logging.info(f"Successfully extracted {len(extracted_frames)} frames from {video_file}")
+        return True
+    else:
+        logging.error(f"Extract video script not found at {extract_script}")
+        return False
+
 # Create working directories
 def create_workspace(**kwargs):
     workspace_dir = os.path.join(OUTPUT_PATH, 'colmap_workspace')
@@ -77,6 +121,13 @@ def feature_extraction(**kwargs):
     use_gpu = workspace_info.get('use_gpu', False)
     
     database_path = os.path.join(workspace_info['database_dir'], 'database.db')
+    
+    # Check if input directory has images
+    image_files = glob.glob(os.path.join(INPUT_PATH, '*.jpg')) + glob.glob(os.path.join(INPUT_PATH, '*.png'))
+    if not image_files:
+        raise Exception(f"No image files found in {INPUT_PATH}")
+    
+    logging.info(f"Found {len(image_files)} images for processing")
     
     # COLMAP feature extraction command
     cmd = f"{COLMAP_PATH} feature_extractor \
@@ -173,8 +224,20 @@ def dense_reconstruction(**kwargs):
     
     if return_code3 != 0:
         raise Exception("Stereo fusion failed")
+    
+    # Copy the final model to a more accessible location
+    final_model_path = os.path.join(OUTPUT_PATH, 'final_model.ply')
+    cmd4 = f"cp {workspace_info['dense_dir']}/fused.ply {final_model_path}"
+    os.system(cmd4)
+    logging.info(f"Final 3D model saved to {final_model_path}")
 
 # Define the tasks
+check_video_task = PythonOperator(
+    task_id='check_and_extract_video',
+    python_callable=check_and_extract_video,
+    dag=dag,
+)
+
 create_workspace_task = PythonOperator(
     task_id='create_workspace',
     python_callable=create_workspace,
@@ -206,4 +269,4 @@ dense_reconstruction_task = PythonOperator(
 )
 
 # Define task dependencies
-create_workspace_task >> feature_extraction_task >> feature_matching_task >> sparse_reconstruction_task >> dense_reconstruction_task 
+check_video_task >> create_workspace_task >> feature_extraction_task >> feature_matching_task >> sparse_reconstruction_task >> dense_reconstruction_task 
