@@ -121,32 +121,6 @@ The pipeline can be configured through environment variables in the `.env` file:
 
 Two options are available for video processing:
 
-#### Option 1: Using Local FFmpeg (requires FFmpeg installation)
-
-1. Install FFmpeg if not already installed (our setup script will attempt to install it):
-   ```bash
-   # macOS
-   brew install ffmpeg
-   
-   # Ubuntu/Debian
-   sudo apt-get install ffmpeg
-   
-   # CentOS/RHEL
-   sudo yum install ffmpeg
-   ```
-
-2. Extract frames from the video:
-   ```bash
-   ./scripts/video_to_frames.sh data/videos/your_video.mp4 data/input 1
-   ```
-
-#### Option 2: Using Docker-based Processing (no FFmpeg installation needed)
-
-1. Use the Docker-based processing script:
-   ```bash
-   ./scripts/docker_video_process.sh data/videos/your_video.mp4 data/input 1
-   ```
-
 Both scripts extract 1 frame per second. Adjust the last parameter to change the frame rate.
 
 3. Run the reconstruction pipeline:
@@ -234,12 +208,6 @@ If FFmpeg is not installed, you have two options:
 - `infra/`: Infrastructure as Code (Terraform, Kubernetes)
 - `tests/`: Unit and integration tests
 - `notebooks/`: Jupyter notebooks for exploration
-- `scripts/`: Helper scripts for the pipeline
-  - `run_colmap.sh`: Main COLMAP execution script
-  - `video_to_frames.sh`: Video to images extraction script (requires FFmpeg)
-  - `docker_video_process.sh`: Docker-based video processing (no FFmpeg required)
-  - `fix_airflow.sh`: Troubleshooting script for Airflow
-  - `setup_environment.sh`: Environment configuration script
 
 ## License
 
