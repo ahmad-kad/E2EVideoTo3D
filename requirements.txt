@@ -1,15 +1,23 @@
 # Python dependencies
 apache-airflow==2.6.3
 apache-airflow-providers-docker==3.7.0
+apache-airflow-providers-slack>=4.0.0
+apache-airflow-providers-amazon>=7.3.0
 minio==7.1.15
 numpy==1.24.3
 opencv-python==4.7.0.72
+open3d>=0.15.0
 pillow==9.5.0
 pyspark==3.4.1
 greatexpectations==0.15.50
 dbt-core==1.5.0
 psycopg2-binary==2.9.6
 evidently==0.4.1
+opencv-python-headless==4.8.0.76
+boto3==1.28.38
+open3d==0.17.0
+matplotlib==3.7.2
+pillow==10.0.0
 
 # Note: For video processing, FFmpeg is required. 
 # Install with your system package manager:
@@ -22,6 +30,7 @@ evidently==0.4.1
 # Core dependencies
 numpy>=1.22.0
 pillow>=9.4.0
+scikit-learn>=1.0.0
 
 # Storage and data handling
 boto3>=1.26.0
@@ -59,4 +68,8 @@ dvc>=3.0.0
 # Visualization
 matplotlib>=3.7.0
 seaborn>=0.12.0
-plotly>=5.14.0 
+plotly>=5.14.0
+
+# Additional utilities for production
+tqdm>=4.60.0
+requests>=2.25.0 

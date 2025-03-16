@@ -26,6 +26,7 @@ fi
 if command -v nvidia-smi &> /dev/null; then
     echo "NVIDIA GPU detected - using GPU acceleration."
     export CUDA_VISIBLE_DEVICES=0
+    export USE_GPU=true
     
     # Install CUDA packages if needed
     if ! pip3 list | grep -q "torch"; then
@@ -35,6 +36,33 @@ if command -v nvidia-smi &> /dev/null; then
 else
     echo "No NVIDIA GPU detected - using CPU mode."
     export CUDA_VISIBLE_DEVICES=""
+    export USE_GPU=false
+fi
+
+# Check for reconstruction pipeline dependencies
+echo "Checking reconstruction pipeline dependencies..."
+
+# Check for COLMAP
+if command -v colmap &> /dev/null; then
+    echo "✅ COLMAP is installed: $(colmap -h | head -n 1)"
+else
+    echo "⚠️ COLMAP is not installed. The reconstruction pipeline may not work properly."
+fi
+
+# Check for Open3D
+if pip3 list | grep -q "open3d"; then
+    echo "✅ Open3D is installed"
+else
+    echo "⚠️ Open3D is not installed. Installing now..."
+    pip3 install open3d
+fi
+
+# Check for AWS CLI and S3 tools
+if pip3 list | grep -q "boto3"; then
+    echo "✅ Boto3 is installed"
+else
+    echo "⚠️ Boto3 is not installed. Installing now..."
+    pip3 install boto3
 fi
 
 # Configure MinIO client
@@ -89,8 +117,13 @@ else
     ls -la /opt/meshroom || echo "Directory doesn't exist"
 fi
 
-# Create necessary directories
+# Create necessary directories for the pipeline
+echo "Setting up directories for the reconstruction pipeline..."
 mkdir -p /app/logs
+mkdir -p /opt/airflow/data/input
+mkdir -p /opt/airflow/data/output
+mkdir -p /opt/airflow/data/videos
+mkdir -p /opt/airflow/data/output/models
 
 # Execute the provided command or default command
 echo "Environment setup complete. Starting application..."

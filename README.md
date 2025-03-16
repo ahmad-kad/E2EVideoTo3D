@@ -29,6 +29,64 @@ H --> I[Metabase Analytics Dashboard]
 J[Apache Airflow] -->|Orchestrates| B & D & E & G
 ```
 
+## 3D Reconstruction Pipeline
+
+The production-ready 3D reconstruction pipeline uses COLMAP to convert videos or image sequences into 3D models.
+
+### Prerequisites
+
+- Docker and Docker Compose
+- NVIDIA GPU (optional but recommended) 
+- 16GB+ RAM recommended
+
+### Running the Pipeline
+
+1. Place your input data in one of these locations:
+   - Videos: `data/videos/` (supported formats: .mp4, .mov, .avi)
+   - Image frames: `data/input/` (supported formats: .jpg, .png)
+
+2. Start the system:
+   ```bash
+   docker-compose up -d
+   ```
+
+3. Access the Airflow UI at http://localhost:8080 (default credentials: admin/admin)
+
+4. Trigger the `reconstruction_pipeline` DAG with optional parameters:
+   - `video_path`: Optional path to a specific video file
+   - `quality`: Quality preset (`low`, `medium`, `high`)
+   - `s3_upload`: Whether to upload results to MinIO
+
+### Pipeline Steps
+
+1. Check dependencies
+2. Find and extract frames from video (if needed)
+3. Check if frames exist
+4. Create COLMAP workspace
+5. Extract features
+6. Match features
+7. Run sparse reconstruction
+8. Run dense reconstruction
+9. Generate mesh
+10. Copy outputs
+11. Upload to MinIO (if enabled)
+
+### Outputs
+
+The pipeline produces the following in `data/output/models/<model_name>/`:
+- Point cloud (PLY format)
+- 3D mesh (PLY format)
+- Camera positions
+- Metadata
+
+### Configuration
+
+The pipeline can be configured through environment variables in the `.env` file:
+
+- `USE_GPU`: Whether to use GPU acceleration (`auto`, `true`, or `false`)
+- `QUALITY_PRESET`: Quality preset (`low`, `medium`, or `high`)
+- `S3_ENABLED`: Whether to upload results to MinIO
+
 ## Getting Started
 
 ### Prerequisites
