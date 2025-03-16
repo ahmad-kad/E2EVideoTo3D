@@ -15,12 +15,14 @@ services:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/plugins:/opt/airflow/plugins
       - ./airflow/logs:/opt/airflow/logs
-      - ${DATA_DIR:-/Users/ahmadkaddoura/Desktop/CODE/e2e3d/data}:/opt/airflow/data
+      - ${DATA_DIR:-./data}:/opt/airflow/data
     ports:
       - "8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
+      init-system:
+        condition: service_completed_successfully
     command: webserver
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
@@ -42,10 +44,12 @@ services:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/plugins:/opt/airflow/plugins
       - ./airflow/logs:/opt/airflow/logs
-      - ${DATA_DIR:-/Users/ahmadkaddoura/Desktop/CODE/e2e3d/data}:/opt/airflow/data
+      - ${DATA_DIR:-./data}:/opt/airflow/data
     depends_on:
       postgres:
         condition: service_healthy
+      init-system:
+        condition: service_completed_successfully
     command: scheduler
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
@@ -66,6 +70,28 @@ services:
         condition: service_healthy
     entrypoint: /bin/bash
     command: -c 'airflow db init && airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com'
+
+  init-system:
+    image: alpine:latest
+    volumes:
+      - ./:/workspace
+      - ${DATA_DIR:-./data}:/data
+    entrypoint: /bin/sh
+    command: >
+      -c "
+        echo 'Creating necessary directories...'
+        mkdir -p /data/input /data/output /data/videos /workspace/airflow/dags /workspace/airflow/logs /workspace/airflow/plugins
+        chmod -R 777 /data /workspace/airflow
+        
+        # Create a sample .env file if it doesn't exist
+        if [ ! -f /workspace/.env ]; then
+          echo 'Creating .env file...'
+          echo 'DATA_DIR=./data' > /workspace/.env
+          echo 'DOCKER_PLATFORM=linux/arm64' >> /workspace/.env
+        fi
+        
+        echo 'System initialization complete!'
+      "
 
   postgres:
     image: postgres:15-alpine
@@ -89,10 +115,13 @@ services:
       - MINIO_ROOT_PASSWORD=minioadmin
       - MINIO_CONSOLE_ADDRESS=:9001
     volumes:
-      - ${DATA_DIR:-/Users/ahmadkaddoura/Desktop/CODE/e2e3d/data}:/data
+      - ${DATA_DIR:-./data}:/data
     ports:
       - "9000:9000"
       - "9001:9001"
+    depends_on:
+      init-system:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 30s
@@ -122,10 +151,11 @@ services:
         - BASE_IMAGE=${BASE_IMAGE:-ubuntu:20.04}
     platform: ${DOCKER_PLATFORM:-linux/arm64}
     volumes:
-      - ${DATA_DIR:-/Users/ahmadkaddoura/Desktop/CODE/e2e3d/data}:/data
-      - ${DATA_DIR:-/Users/ahmadkaddoura/Desktop/CODE/e2e3d/data}:/app/data
+      - ${DATA_DIR:-./data}:/data
+      - ${DATA_DIR:-./data}:/app/data
     depends_on:
       - minio
+      - init-system
     environment:
       - MINIO_SERVER=minio:9000
       - MINIO_USER=minioadmin
@@ -139,7 +169,9 @@ services:
       - "8081:8080"
       - "7077:7077"
     volumes:
-      - ${DATA_DIR:-/Users/ahmadkaddoura/Desktop/CODE/e2e3d/data}:/data
+      - ${DATA_DIR:-./data}:/data
+    depends_on:
+      - init-system
     environment:
       - SPARK_MODE=master
       - SPARK_RPC_AUTHENTICATION_ENABLED=no
@@ -152,8 +184,9 @@ services:
     platform: ${DOCKER_PLATFORM:-linux/arm64}
     depends_on:
       - spark-master
+      - init-system
     volumes:
-      - ${DATA_DIR:-/Users/ahmadkaddoura/Desktop/CODE/e2e3d/data}:/data
+      - ${DATA_DIR:-./data}:/data
     environment:
       - SPARK_MODE=worker
       - SPARK_MASTER_URL=spark://spark-master:7077
