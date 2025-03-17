@@ -1,0 +1,32 @@
+# Airflow providers
+apache-airflow-providers-docker>=3.7.0,<4.0.0
+apache-airflow-providers-slack>=4.0.0,<5.0.0
+apache-airflow-providers-amazon>=7.3.0,<8.0.0
+apache-airflow-providers-google>=10.0.0,<11.0.0
+apache-airflow-providers-cncf-kubernetes>=5.1.0,<6.0.0
+
+# Data validation and monitoring
+great-expectations>=0.13.0,<0.15.0
+evidently>=0.1.0,<0.3.0
+
+# Visualization and analytics
+dbt-core>=1.0.0,<1.4.0
+jupyter>=1.0.0,<2.0.0
+
+# Infrastructure
+kubernetes>=21.7.0,<26.0.0
+docker>=5.0.0,<6.0.0
+
+# Core dependencies (that don't conflict with Airflow core)
+numpy>=1.19.0,<1.22.0
+pillow>=8.0.0,<9.0.0
+opencv-python-headless>=4.5.0,<4.7.0
+boto3>=1.20.0,<1.28.0
+minio>=7.0.0,<7.1.0
+
+# 3D reconstruction and mesh generation dependencies
+open3d>=0.13.0,<0.16.0
+pymeshlab>=2021.0,<2022.0
+pyntcloud>=0.1.0,<0.2.0
+trimesh>=3.9.0,<3.15.0
+numpy-stl>=2.16.0,<3.0.0 

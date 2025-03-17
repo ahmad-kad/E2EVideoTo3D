@@ -1,6 +1,5 @@
 #!/bin/bash
-# run.sh
-# Main script to set up and run the E2E3D system
+# run.sh - Main script to set up and run the E2E3D system
 
 # Enable error handling
 set -e
@@ -22,29 +21,46 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export PROJECT_DIR="$SCRIPT_DIR"
 cd "$PROJECT_DIR"
 
-# Run the directory setup script
+# Make scripts executable
+echo -e "${BLUE}Making scripts executable...${NC}"
+chmod +x docker/scripts/*.sh 2>/dev/null || echo -e "${YELLOW}No scripts to make executable or permission denied${NC}"
+chmod +x scripts/*.sh 2>/dev/null || echo -e "${YELLOW}No scripts to make executable or permission denied${NC}"
+
+# Create essential directories
 echo -e "${BLUE}Setting up directories...${NC}"
-if [ -f "$PROJECT_DIR/scripts/setup_directories.sh" ]; then
-    bash "$PROJECT_DIR/scripts/setup_directories.sh"
-    
-    # Source environment variables
-    if [ -f "$PROJECT_DIR/.env" ]; then
-        source "$PROJECT_DIR/.env"
-        echo -e "${GREEN}Loaded environment variables from .env file${NC}"
-    fi
+mkdir -p "$PROJECT_DIR/data/input"
+mkdir -p "$PROJECT_DIR/data/output"
+mkdir -p "$PROJECT_DIR/data/videos"
+mkdir -p "$PROJECT_DIR/airflow/dags"
+mkdir -p "$PROJECT_DIR/airflow/logs"
+mkdir -p "$PROJECT_DIR/airflow/plugins"
+
+# Set environment variables
+export DATA_DIR="$PROJECT_DIR/data"
+export INPUT_DIR="$DATA_DIR/input"
+export OUTPUT_DIR="$DATA_DIR/output"
+export VIDEOS_DIR="$DATA_DIR/videos"
+
+# Create or source .env file
+if [ -f "$PROJECT_DIR/.env" ]; then
+    echo -e "${GREEN}Loading environment from .env file${NC}"
+    set -a
+    source "$PROJECT_DIR/.env"
+    set +a
 else
-    echo -e "${RED}Error: setup_directories.sh not found${NC}"
-    echo -e "${YELLOW}Creating essential directories manually...${NC}"
-    mkdir -p "$PROJECT_DIR/data/input"
-    mkdir -p "$PROJECT_DIR/data/output"
-    mkdir -p "$PROJECT_DIR/data/videos"
-    mkdir -p "$PROJECT_DIR/airflow/dags"
-    
-    # Set environment variables manually
-    export DATA_DIR="$PROJECT_DIR/data"
-    export INPUT_DIR="$DATA_DIR/input"
-    export OUTPUT_DIR="$DATA_DIR/output"
-    export VIDEOS_DIR="$DATA_DIR/videos"
+    echo -e "${YELLOW}Creating .env file with default settings${NC}"
+    cat > "$PROJECT_DIR/.env" << EOF
+DATA_DIR=./data
+DOCKER_PLATFORM=linux/arm64
+USE_GPU=auto
+QUALITY_PRESET=medium
+S3_ENABLED=true
+S3_ENDPOINT=http://minio:9000
+S3_BUCKET=models
+S3_ACCESS_KEY=minioadmin
+S3_SECRET_KEY=minioadmin
+S3_REGION=us-east-1
+EOF
 fi
 
 # Check if Docker is installed
@@ -65,23 +81,59 @@ fi
 
 # Check if docker-compose is installed
 echo -e "${BLUE}Checking docker-compose installation...${NC}"
-if ! command -v docker-compose &> /dev/null && ! command -v docker compose &> /dev/null; then
+if command -v docker-compose &> /dev/null; then
+    DOCKER_COMPOSE="docker-compose"
+elif command -v docker &> /dev/null && docker compose version &> /dev/null; then
+    DOCKER_COMPOSE="docker compose"
+else
     echo -e "${RED}Error: docker-compose is not installed${NC}"
     echo -e "${YELLOW}Please install docker-compose or use Docker Desktop which includes it${NC}"
     exit 1
 fi
 
-# Check if docker compose is separate command or subcommand
-if command -v docker-compose &> /dev/null; then
-    DOCKER_COMPOSE="docker-compose"
-else
-    DOCKER_COMPOSE="docker compose"
+# Force rebuild if requested or not previously installed
+FORCE_REBUILD=0
+if [ "$1" == "build" ] || [ "$1" == "--build" ] || [ "$1" == "-b" ]; then
+    echo -e "${BLUE}Force rebuild requested${NC}"
+    FORCE_REBUILD=1
 fi
 
-# Fix Docker services if needed
-if [ -f "$PROJECT_DIR/scripts/fix_docker_services.sh" ]; then
-    echo -e "${BLUE}Fixing Docker services configuration...${NC}"
-    bash "$PROJECT_DIR/scripts/fix_docker_services.sh"
+if [ $FORCE_REBUILD -eq 1 ] || [ ! -f "$PROJECT_DIR/.e2e3d_installed" ]; then
+    echo -e "${BLUE}Building Docker images...${NC}"
+    
+    # Build the base image first
+    echo -e "${BLUE}Building base image...${NC}"
+    docker build -t e2e3d-base:latest -f docker/base/Dockerfile .
+    BASE_STATUS=$?
+    
+    if [ $BASE_STATUS -ne 0 ]; then
+        echo -e "${RED}Error building base image. See logs above for details.${NC}"
+        exit 1
+    fi
+    
+    # Build the COLMAP image
+    echo -e "${BLUE}Building COLMAP image...${NC}"
+    docker build -t e2e3d-colmap:latest -f docker/colmap/Dockerfile .
+    COLMAP_STATUS=$?
+    
+    if [ $COLMAP_STATUS -ne 0 ]; then
+        echo -e "${RED}Error building COLMAP image. See logs above for details.${NC}"
+        exit 1
+    fi
+    
+    # Build the Airflow image
+    echo -e "${BLUE}Building Airflow image...${NC}"
+    docker build -t e2e3d-airflow:latest -f docker/airflow/Dockerfile .
+    AIRFLOW_STATUS=$?
+    
+    if [ $AIRFLOW_STATUS -ne 0 ]; then
+        echo -e "${RED}Error building Airflow image. See logs above for details.${NC}"
+        exit 1
+    fi
+    
+    touch "$PROJECT_DIR/.e2e3d_installed"
+else
+    echo -e "${BLUE}Using existing Docker images. Use 'run.sh build' to rebuild.${NC}"
 fi
 
 # Start Docker services
@@ -128,16 +180,19 @@ else
     $DOCKER_COMPOSE logs minio | tail -n 20
 fi
 
-# Copy DAG file if it doesn't exist
-if [ ! -f "$PROJECT_DIR/airflow/dags/reconstruction_pipeline.py" ]; then
-    echo -e "${BLUE}Copying reconstruction pipeline DAG...${NC}"
-    cp "$PROJECT_DIR/airflow/dags/reconstruction_pipeline.py.template" "$PROJECT_DIR/airflow/dags/reconstruction_pipeline.py" 2>/dev/null || true
-fi
-
 # Display available videos
 echo -e "${BLUE}Available videos:${NC}"
 find "$VIDEOS_DIR" -type f \( -name "*.mp4" -o -name "*.mov" -o -name "*.avi" \) | while read -r video; do
     echo "  - $(basename "$video")"
+done
+
+# Display available image sets
+echo -e "${BLUE}Available image sets:${NC}"
+find "$INPUT_DIR" -maxdepth 1 -type d | grep -v "^\.$" | while read -r dir; do
+    if [ "$dir" != "$INPUT_DIR" ]; then
+        count=$(find "$dir" -type f \( -name "*.jpg" -o -name "*.png" \) | wc -l)
+        echo "  - $(basename "$dir") ($count images)"
+    fi
 done
 
 # Instructions for the user
@@ -147,22 +202,15 @@ echo -e "${BLUE}======================================${NC}"
 echo -e "You can access the following services:"
 echo -e "  - Airflow UI: http://localhost:8080 (username: admin, password: admin)"
 echo -e "  - MinIO UI: http://localhost:9001 (username: minioadmin, password: minioadmin)"
-echo -e "  - Spark Master UI: http://localhost:8082"
 echo -e "${BLUE}======================================${NC}"
 echo -e "${YELLOW}Processing options:${NC}"
-echo -e "1. Process a video to images:"
-echo -e "   ./scripts/extract_video.sh -v <video_path> [-f <fps>]"
-echo -e "   Example: ./scripts/extract_video.sh -v my_video.mp4 -f 2"
+echo -e "1. Run direct reconstruction on image set:"
+echo -e "   docker compose exec reconstruction python3 /app/reconstruct.py [IMAGESET_NAME]"
 echo -e ""
-echo -e "2. Process images directly through Airflow:"
+echo -e "2. Process images through Airflow:"
 echo -e "   - Access Airflow UI at http://localhost:8080"
 echo -e "   - Login with username 'admin' and password 'admin'"
 echo -e "   - Find and trigger the 'reconstruction_pipeline' DAG"
-echo -e "${BLUE}======================================${NC}"
-
-# Troubleshooting hint
-echo -e "${YELLOW}If you have trouble accessing the Airflow UI, try:${NC}"
-echo -e "./scripts/troubleshoot_airflow.sh"
 echo -e "${BLUE}======================================${NC}"
 
 exit 0 

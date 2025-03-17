@@ -20,46 +20,78 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+.coverage.*
+.cache/
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
 
-# Virtual Environment
+# Virtual environments
 venv/
 ENV/
 env/
+.env
 
-# Jupyter Notebooks
-.ipynb_checkpoints
-*/.ipynb_checkpoints/*
+# Data directories
+data/
+output/
+logs/
 
-# IDE specific files
+# Docker
+.docker/
+.dockerignore
+
+# IDE
 .idea/
 .vscode/
 *.swp
 *.swo
-
-# Docker
-.dockerignore
-
-# Terraform
-.terraform/
-terraform.tfstate
-terraform.tfstate.backup
-*.tfvars
-.terragrunt-cache/
-
-# MinIO data
-minio-data/
+.DS_Store
 
 # Airflow
+airflow/logs/
+airflow/plugins/
 airflow.db
 airflow.cfg
-logs/
-airflow-webserver.pid
 webserver_config.py
+airflow-webserver.pid
 
-# PySpark
-metastore_db/
-spark-warehouse/
-derby.log
+# MinIO
+.minio.sys/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*~
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Secrets
+.env
+.aws/
+.kube/
+credentials.json
+
+# Great Expectations
+great_expectations/uncommitted/
 
 # Meshroom
 cache/
@@ -71,31 +103,11 @@ data/frames/
 data/processed_frames/
 data/models/
 
-# Logs
-*.log
-
-# Secrets
-.env
-.aws/
-.kube/
-credentials.json
-
-# Great Expectations
-great_expectations/uncommitted/
-
-# macOS
-.DS_Store
-
-# Evidently AI reports
-monitoring/reports/
-
-# Temporary files
-tmp/
-temp/ 
-
+# Roadmap
 roadmap.md
 
-data/
-
+# Cursor
 .cursor
+
+# Image sets
 image_sets/
