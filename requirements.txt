@@ -19,6 +19,13 @@ open3d==0.17.0
 matplotlib==3.7.2
 pillow==10.0.0
 
+# 3D Reconstruction and Mesh Generation dependencies
+numpy-stl>=3.0.0
+pymeshlab>=2022.2.post3
+trimesh>=3.22.0
+pyntcloud>=0.3.0  # For point cloud processing
+pyvista>=0.39.0   # For mesh visualization and processing
+
 # Note: For video processing, FFmpeg is required. 
 # Install with your system package manager:
 # - macOS: brew install ffmpeg
@@ -72,4 +79,8 @@ plotly>=5.14.0
 
 # Additional utilities for production
 tqdm>=4.60.0
-requests>=2.25.0 
+requests>=2.25.0
+
+# Note: For PoissonRecon mesh generation, an external binary is needed
+# Install with your package manager or download from:
+# https://github.com/mkazhdan/PoissonRecon 
