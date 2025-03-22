@@ -38,15 +38,21 @@ venv/
 ENV/
 env/
 .env
+.venv/
 
 # Data directories
 data/
+input/
 output/
 logs/
+tmp*/
+tmp_*/
+*/tmp*/
 
 # Docker
 .docker/
 .dockerignore
+docker-compose.override.yml
 
 # IDE
 .idea/
@@ -65,6 +71,11 @@ airflow-webserver.pid
 
 # MinIO
 .minio.sys/
+minio_data/
+
+# Prometheus & Grafana
+prometheus_data/
+grafana_data/
 
 # Jupyter
 .ipynb_checkpoints/
@@ -73,41 +84,61 @@ airflow-webserver.pid
 # Logs
 *.log
 logs/
+*/logs/
 
 # Temporary files
 *.tmp
 *.bak
 *.swp
 *~
+.temp/
+temp/
 
 # OS specific
 .DS_Store
 Thumbs.db
+.directory
+.Trash*
+.fuse_hidden*
 
 # Secrets
 .env
 .aws/
 .kube/
 credentials.json
+*_key.json
+*secret*
+*credential*
 
 # Great Expectations
 great_expectations/uncommitted/
 
-# Meshroom
+# 3D Reconstruction specific
 cache/
 meshroom_data/
+point_cloud/
+*/point_cloud/
+meshes/
+*/meshes/
+textures/
+*/textures/
+reconstruction_output/
 
-# Data (raw and processed)
-data/raw_videos/
-data/frames/
-data/processed_frames/
-data/models/
-
-# Roadmap
-roadmap.md
-
-# Cursor
-.cursor
+# E2E3D specific
+data/input/
+data/output/
+production/data/
+production/logs/
+tmp_automated_test/
+*/SUCCESS
 
 # Image sets
 image_sets/
+**/CognacStJacquesDoor/
+
+# Date-based output directories
+*_20[0-9][0-9][0-9][0-9][0-9][0-9]_*/
+
+# Cursor
+.cursor
+.cursorignore
