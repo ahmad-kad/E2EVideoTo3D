@@ -1,0 +1,84 @@
+FROM python:3.7.9-slim
+
+LABEL maintainer="E2E3D Team <team@e2e3d.org>"
+LABEL description="E2E3D Reconstruction Service"
+LABEL version="1.0"
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONIOENCODING=UTF-8 \
+    LANG=C.UTF-8 \
+    DEBIAN_FRONTEND=noninteractive \
+    TZ=UTC
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    wget \
+    git \
+    ffmpeg \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
+    libxrender1 \
+    libxext6 \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install pip and numpy first, with specific version constraints
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir numpy==1.21.6
+
+# Install other Python dependencies from requirements file
+COPY requirements-minimal.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt && \
+    # Install additional packages for reconstruction
+    pip install --no-cache-dir \
+    pillow==9.5.0 \
+    opencv-python-headless==4.7.0.72 \
+    matplotlib==3.5.3 \
+    boto3==1.28.0 \
+    minio==7.1.15 \
+    prometheus-client==0.17.1 \
+    Flask==2.0.3 \
+    gunicorn==21.2.0 \
+    pytest==7.4.0
+
+# Separately install open3d as it might have specific dependencies
+RUN pip install --no-cache-dir open3d==0.17.0
+
+# Create necessary directories
+RUN mkdir -p /app/data/input \
+    /app/data/output \
+    /app/logs \
+    /app/scripts
+
+# Copy application files
+COPY production/scripts/reconstruct.py /app/scripts/reconstruct.py
+COPY production/scripts/upload_to_minio.py /app/scripts/upload_to_minio.py
+COPY production/scripts/healthcheck.py /app/scripts/healthcheck.py
+COPY production/scripts/api.py /app/scripts/api.py
+COPY production/scripts/entrypoint.sh /app/entrypoint.sh
+
+# Make scripts executable
+RUN chmod +x /app/scripts/api.py
+RUN chmod +x /app/entrypoint.sh
+
+# Set working directory
+WORKDIR /app
+
+# Expose API port
+EXPOSE 5000
+# Expose metrics port
+EXPOSE 9101
+
+# Set entrypoint
+ENTRYPOINT ["/app/entrypoint.sh"]
+
+# Default command
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "4", "--timeout", "120", "scripts.api:app"] 

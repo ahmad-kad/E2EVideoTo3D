@@ -1,0 +1,213 @@
+version: '3.8'
+
+services:
+  # Base image build
+  base:
+    build:
+      context: .
+      dockerfile: docker/base/Dockerfile
+    image: e2e3d-base:latest
+    profiles: ["build"]
+
+  # COLMAP image build
+  colmap:
+    build:
+      context: .
+      dockerfile: docker/colmap/Dockerfile
+    image: e2e3d-colmap:latest
+    depends_on:
+      base:
+        condition: service_completed_successfully
+    profiles: ["build"]
+
+  # Reconstruction image build
+  reconstruction:
+    build:
+      context: .
+      dockerfile: docker/e2e3d-reconstruction/Dockerfile
+    image: e2e3d-reconstruction:latest
+    depends_on:
+      colmap:
+        condition: service_completed_successfully
+    profiles: ["build"]
+
+  # Airflow image build with fixed Dockerfile
+  airflow:
+    build:
+      context: .
+      dockerfile: docker/airflow/Dockerfile.fixed
+    image: e2e3d-airflow:latest
+    profiles: ["build"]
+
+  # MinIO Object Storage
+  minio:
+    image: minio/minio:RELEASE.2023-07-21T21-12-44Z
+    container_name: e2e3d-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio-volume:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: always
+    networks:
+      - e2e3d-network
+
+  # Create MinIO buckets and set permissions
+  minio-setup:
+    image: minio/mc
+    container_name: e2e3d-minio-setup
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc config host add myminio http://minio:9000 minioadmin minioadmin;
+      /usr/bin/mc mb --ignore-existing myminio/models;
+      /usr/bin/mc mb --ignore-existing myminio/input;
+      /usr/bin/mc mb --ignore-existing myminio/output;
+      /usr/bin/mc policy set download myminio/models;
+      /usr/bin/mc policy set download myminio/output;
+      exit 0;
+      "
+    restart: on-failure
+    networks:
+      - e2e3d-network
+
+  # PostgreSQL database for Airflow
+  postgres:
+    image: postgres:15-alpine
+    container_name: e2e3d-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres-db-volume:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+    networks:
+      - e2e3d-network
+
+  # Airflow webserver
+  airflow-webserver:
+    image: e2e3d-airflow:latest
+    container_name: e2e3d-airflow-webserver
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__CORE__FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
+      - AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags
+      - AIRFLOW__WEBSERVER__EXPOSE_CONFIG=True
+      - PROJECT_PATH=/opt/airflow/data
+      - COLMAP_PATH=colmap
+      - USE_GPU=auto
+      - QUALITY_PRESET=medium
+      - S3_ENABLED=true
+      - S3_ENDPOINT=http://minio:9000
+      - S3_BUCKET=models
+      - S3_ACCESS_KEY=minioadmin
+      - S3_SECRET_KEY=minioadmin
+      - PYTHONPATH=/opt/airflow:/opt/airflow/dags:/opt/airflow/plugins
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./src:/opt/airflow/src
+      - ./data:/opt/airflow/data
+    command: bash -c "airflow db init && airflow users create --username admin --firstname Admin --lastname User --role Admin --email admin@example.com --password admin && airflow webserver"
+    restart: always
+    networks:
+      - e2e3d-network
+
+  # Airflow scheduler
+  airflow-scheduler:
+    image: e2e3d-airflow:latest
+    container_name: e2e3d-airflow-scheduler
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-webserver:
+        condition: service_started
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__CORE__FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
+      - AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags
+      - AIRFLOW__WEBSERVER__EXPOSE_CONFIG=True
+      - PROJECT_PATH=/opt/airflow/data
+      - COLMAP_PATH=colmap
+      - USE_GPU=auto
+      - QUALITY_PRESET=medium
+      - S3_ENABLED=true
+      - S3_ENDPOINT=http://minio:9000
+      - S3_BUCKET=models
+      - S3_ACCESS_KEY=minioadmin
+      - S3_SECRET_KEY=minioadmin
+      - PYTHONPATH=/opt/airflow:/opt/airflow/dags:/opt/airflow/plugins
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./src:/opt/airflow/src
+      - ./data:/opt/airflow/data
+    command: airflow scheduler
+    restart: always
+    networks:
+      - e2e3d-network
+
+  # 3D reconstruction service (can be triggered from Airflow or run standalone)
+  e2e3d-reconstruction-service:
+    image: e2e3d-reconstruction:latest
+    container_name: e2e3d-reconstruction-service
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      - S3_ENABLED=true
+      - S3_ENDPOINT=http://minio:9000
+      - S3_BUCKET=models
+      - S3_ACCESS_KEY=minioadmin
+      - S3_SECRET_KEY=minioadmin
+      - QUALITY_PRESET=medium
+    volumes:
+      - ./data:/app/data
+      - ./upload_mesh_to_minio.py:/app/upload_mesh_to_minio.py
+    networks:
+      - e2e3d-network
+    profiles: ["standalone"]
+    restart: "no"
+    command: >
+      bash -c "
+        echo 'Ready to process image sets through Airflow or direct invocation'
+        tail -f /dev/null
+      "
+
+volumes:
+  postgres-db-volume:
+  minio-volume:
+
+networks:
+  e2e3d-network:
+    driver: bridge 

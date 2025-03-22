@@ -33,10 +33,13 @@ RUN pip3 install --no-cache-dir --upgrade pip setuptools wheel
 # Set working directory
 WORKDIR /app
 
-# Install dependencies in a more organized way
-# First, common packages with defined versions
+# Install dependencies with fixed numpy package
+RUN pip3 install --no-cache-dir numpy==1.21.6
+
+# Install the rest of the dependencies
 COPY requirements-common.txt /app/
-RUN pip3 install --no-cache-dir -r requirements-common.txt
+RUN grep -v "numpy" requirements-common.txt > /app/requirements-without-numpy.txt && \
+    pip3 install --no-cache-dir -r /app/requirements-without-numpy.txt
 
 # Install GPU packages conditionally at runtime
 COPY docker/scripts/detect_gpu.sh /usr/local/bin/

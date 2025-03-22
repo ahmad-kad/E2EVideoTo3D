@@ -1,0 +1,38 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  scrape_timeout: 10s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+      scheme: http
+      timeout: 10s
+      api_version: v1
+
+rule_files:
+  # - "alerts.yml"
+
+scrape_configs:
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: "reconstruction-service"
+    scrape_interval: 10s
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["reconstruction-service:9101"]
+    
+  - job_name: "airflow"
+    scrape_interval: 10s
+    metrics_path: /airflow/metrics
+    static_configs:
+      - targets: ["airflow-webserver:8080"]
+
+  - job_name: "minio"
+    scrape_interval: 10s
+    metrics_path: /minio/v2/metrics/cluster
+    static_configs:
+      - targets: ["minio:9000"] 

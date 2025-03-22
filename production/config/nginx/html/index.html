@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E2E3D Production Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f8f9fa;
+            padding-top: 56px;
+        }
+        .navbar-brand {
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+        .card {
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+            margin-bottom: 20px;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+        }
+        .card-header {
+            font-weight: 600;
+            background-color: #f1f8ff;
+            border-bottom: 1px solid #e3f2fd;
+        }
+        .hero {
+            background: linear-gradient(135deg, #4b6cb7 0%, #182848 100%);
+            color: white;
+            padding: 3rem 0;
+            margin-bottom: 2rem;
+        }
+        .status-badge {
+            font-size: 0.8rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 12px;
+        }
+        .footer {
+            background-color: #343a40;
+            color: white;
+            padding: 1.5rem 0;
+            margin-top: 3rem;
+        }
+        .service-icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="/">E2E3D Platform</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/airflow/">Workflows</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/minio/">Storage</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/grafana/">Monitoring</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/output/">Output Files</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container text-center">
+            <h1>E2E3D Production Dashboard</h1>
+            <p class="lead">Complete end-to-end 3D reconstruction pipeline management platform</p>
+        </div>
+    </section>
+
+    <!-- Main Content -->
+    <div class="container">
+        <!-- System Status -->
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span>System Status</span>
+                        <span class="status-badge bg-success">Operational</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col-md-3 mb-3">
+                                <div id="airflow-status" class="status-badge bg-success">Operational</div>
+                                <p>Workflow Service</p>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div id="minio-status" class="status-badge bg-success">Operational</div>
+                                <p>Storage Service</p>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div id="recon-status" class="status-badge bg-success">Operational</div>
+                                <p>Reconstruction Service</p>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div id="monitoring-status" class="status-badge bg-success">Operational</div>
+                                <p>Monitoring Service</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Services -->
+        <h2 class="mb-4">Services</h2>
+        <div class="row">
+            <!-- Airflow -->
+            <div class="col-md-6 col-lg-3 mb-4">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <div class="service-icon">🔄</div>
+                        <h5 class="card-title">Airflow</h5>
+                        <p class="card-text">Workflow orchestration for managing reconstruction jobs</p>
+                        <a href="/airflow/" class="btn btn-primary">Open Airflow</a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- MinIO -->
+            <div class="col-md-6 col-lg-3 mb-4">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <div class="service-icon">📦</div>
+                        <h5 class="card-title">MinIO</h5>
+                        <p class="card-text">Object storage for input images and output meshes</p>
+                        <a href="/minio/" class="btn btn-primary">Open MinIO</a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Grafana -->
+            <div class="col-md-6 col-lg-3 mb-4">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <div class="service-icon">📊</div>
+                        <h5 class="card-title">Grafana</h5>
+                        <p class="card-text">Visualization dashboards for monitoring metrics</p>
+                        <a href="/grafana/" class="btn btn-primary">Open Grafana</a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Prometheus -->
+            <div class="col-md-6 col-lg-3 mb-4">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <div class="service-icon">📈</div>
+                        <h5 class="card-title">Prometheus</h5>
+                        <p class="card-text">Metrics collection and alerting system</p>
+                        <a href="/prometheus/" class="btn btn-primary">Open Prometheus</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Quick Actions -->
+        <h2 class="mb-4">Quick Actions</h2>
+        <div class="row">
+            <div class="col-md-6 mb-4">
+                <div class="card">
+                    <div class="card-header">
+                        Start New Reconstruction
+                    </div>
+                    <div class="card-body">
+                        <p>Upload your images to MinIO and trigger a new reconstruction job.</p>
+                        <a href="/airflow/dags/e2e3d_reconstruction" class="btn btn-success">Start Job</a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 mb-4">
+                <div class="card">
+                    <div class="card-header">
+                        View Output Files
+                    </div>
+                    <div class="card-body">
+                        <p>Browse and download the reconstructed 3D meshes and other output files.</p>
+                        <a href="/output/" class="btn btn-info">Browse Files</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Recent Jobs -->
+        <h2 class="mb-4">Recent Jobs</h2>
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Job ID</th>
+                                <th>Start Time</th>
+                                <th>Duration</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recent-jobs">
+                            <tr>
+                                <td colspan="5" class="text-center">No recent jobs found. Start a new job to see it here.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer mt-auto">
+        <div class="container text-center">
+            <p>© 2023 E2E3D Platform. All rights reserved.</p>
+            <p class="text-muted">Version 1.0.0</p>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Simple status checker script -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Function to check service status
+            function checkServiceStatus(service, elementId) {
+                const statusElement = document.getElementById(elementId);
+                if (!statusElement) return;
+                
+                fetch(`/${service}/health`, { method: 'GET' })
+                    .then(response => {
+                        if (response.ok) {
+                            statusElement.className = 'status-badge bg-success';
+                            statusElement.textContent = 'Operational';
+                        } else {
+                            statusElement.className = 'status-badge bg-warning';
+                            statusElement.textContent = 'Degraded';
+                        }
+                    })
+                    .catch(() => {
+                        statusElement.className = 'status-badge bg-danger';
+                        statusElement.textContent = 'Unavailable';
+                    });
+            }
+            
+            // Check statuses periodically
+            setTimeout(() => {
+                checkServiceStatus('airflow', 'airflow-status');
+                checkServiceStatus('minio', 'minio-status');
+                checkServiceStatus('api', 'recon-status');
+                checkServiceStatus('grafana', 'monitoring-status');
+            }, 2000); // Small delay to ensure the page is fully loaded
+        });
+    </script>
+</body>
+</html> 

@@ -1,0 +1,173 @@
+version: '3.8'
+
+services:
+  # Build services first
+  build-base:
+    build:
+      context: .
+      dockerfile: docker/base/Dockerfile
+    image: e2e3d-base:latest
+    command: echo "Base image built successfully"
+
+  build-colmap:
+    build:
+      context: .
+      dockerfile: docker/colmap/Dockerfile
+    image: e2e3d-colmap:latest
+    depends_on:
+      - build-base
+    command: echo "COLMAP image built successfully"
+
+  build-airflow:
+    build:
+      context: .
+      dockerfile: docker/airflow/Dockerfile
+    image: e2e3d-airflow:latest
+    command: echo "Airflow image built successfully"
+
+  # MinIO Object Storage
+  minio:
+    image: quay.io/minio/minio:latest
+    container_name: e2e3d-minio-service
+    ports:
+      - 9000:9000
+      - 9001:9001
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio-volume:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 20s
+      retries: 3
+    restart: always
+
+  # MinIO setup job - creates bucket and permissions
+  minio-setup:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      until (mc config host add myminio http://minio:9000 minioadmin minioadmin) do echo '...waiting for minio to be ready...' && sleep 1; done;
+      mc mb --ignore-existing myminio/models;
+      mc mb --ignore-existing myminio/input;
+      mc mb --ignore-existing myminio/output;
+      mc policy set download myminio/models;
+      mc policy set download myminio/output;
+      echo 'MinIO setup completed successfully';
+      exit 0;
+      "
+      
+  # Database for Airflow
+  postgres:
+    image: postgres:15-alpine
+    ports:
+      - 5432:5432
+    environment:
+      - POSTGRES_USER=airflow
+      - POSTGRES_PASSWORD=airflow
+      - POSTGRES_DB=airflow
+    volumes:
+      - postgres-db-volume:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 5s
+      retries: 5
+    restart: always
+
+  # Airflow webserver
+  airflow-webserver:
+    image: e2e3d-airflow:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+      build-airflow:
+        condition: service_completed_successfully
+    ports:
+      - 8080:8080
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags
+      - AIRFLOW__WEBSERVER__EXPOSE_CONFIG=True
+      - AIRFLOW__CORE__FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
+      - PROJECT_PATH=/opt/airflow/data
+      - COLMAP_PATH=colmap
+      - USE_GPU=auto
+      - QUALITY_PRESET=medium
+      - S3_ENABLED=true
+      - S3_ENDPOINT=http://minio:9000
+      - S3_BUCKET=models
+      - S3_ACCESS_KEY=minioadmin
+      - S3_SECRET_KEY=minioadmin
+      - S3_REGION=us-east-1
+      - PYTHONPATH=/opt/airflow:/opt/airflow/dags:/opt/airflow/plugins
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./src:/opt/airflow/src
+      - ./data:/opt/airflow/data
+    command: webserver
+    restart: always
+
+  # Airflow scheduler
+  airflow-scheduler:
+    image: e2e3d-airflow:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+      build-airflow:
+        condition: service_completed_successfully
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags
+      - AIRFLOW__WEBSERVER__EXPOSE_CONFIG=True
+      - AIRFLOW__CORE__FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
+      - PROJECT_PATH=/opt/airflow/data
+      - COLMAP_PATH=colmap
+      - USE_GPU=auto
+      - QUALITY_PRESET=medium
+      - S3_ENABLED=true
+      - S3_ENDPOINT=http://minio:9000
+      - S3_BUCKET=models
+      - S3_ACCESS_KEY=minioadmin
+      - S3_SECRET_KEY=minioadmin
+      - S3_REGION=us-east-1
+      - PYTHONPATH=/opt/airflow:/opt/airflow/dags:/opt/airflow/plugins
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./src:/opt/airflow/src
+      - ./data:/opt/airflow/data
+    command: scheduler
+    restart: always
+
+  # Airflow init (initialize the database)
+  airflow-init:
+    image: e2e3d-airflow:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+      build-airflow:
+        condition: service_completed_successfully
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags
+      - AIRFLOW_UID=50000
+    volumes:
+      - ./dags:/opt/airflow/dags
+    command: version && db init && airflow users create --username admin --firstname Admin --lastname User --role Admin --email admin@example.com --password admin
+    restart: on-failure
+
+volumes:
+  postgres-db-volume:
+  minio-volume: 

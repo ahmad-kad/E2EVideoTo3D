@@ -1,0 +1,317 @@
+version: '3.8'
+
+services:
+  #--------------------------------------------------
+  # MinIO - Object Storage
+  #--------------------------------------------------
+  minio:
+    image: minio/minio:latest
+    container_name: e2e3d-minio
+    command: server --console-address ":9001" /data
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - e2e3d-network
+    restart: unless-stopped
+
+  minio-setup:
+    image: minio/mc:latest
+    container_name: e2e3d-minio-setup
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc config host add myminio http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin};
+      /usr/bin/mc mb myminio/input --ignore-existing;
+      /usr/bin/mc mb myminio/output --ignore-existing;
+      /usr/bin/mc mb myminio/models --ignore-existing;
+      /usr/bin/mc policy set public myminio/models;
+      exit 0;
+      "
+    networks:
+      - e2e3d-network
+
+  #--------------------------------------------------
+  # Postgres - Database for Airflow
+  #--------------------------------------------------
+  postgres:
+    image: postgres:13
+    container_name: e2e3d-postgres
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-airflow}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-airflow}
+      - POSTGRES_DB=${POSTGRES_DB:-airflow}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER:-airflow}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - e2e3d-network
+    restart: unless-stopped
+
+  #--------------------------------------------------
+  # Redis - Queue for Airflow
+  #--------------------------------------------------
+  redis:
+    image: redis:7.0
+    container_name: e2e3d-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - e2e3d-network
+    restart: unless-stopped
+
+  #--------------------------------------------------
+  # Airflow Components
+  #--------------------------------------------------
+  airflow-webserver:
+    image: ${DOCKER_REGISTRY:-localhost}/e2e3d-airflow:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: production/Dockerfile.airflow
+    container_name: e2e3d-airflow-webserver
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=CeleryExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD:-airflow}@postgres/${POSTGRES_DB:-airflow}
+      - AIRFLOW__CELERY__RESULT_BACKEND=db+postgresql://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD:-airflow}@postgres/${POSTGRES_DB:-airflow}
+      - AIRFLOW__CELERY__BROKER_URL=redis://redis:6379/0
+      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW_SECRET_KEY:-temporary_key}
+      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY:-}
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth
+      - AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags
+      - AIRFLOW_HOME=/opt/airflow
+      - AIRFLOW__WEBSERVER__EXPOSE_CONFIG=False
+      - _AIRFLOW_WWW_USER_CREATE=True
+      - _AIRFLOW_WWW_USER_USERNAME=${AIRFLOW_ADMIN_USER:-admin}
+      - _AIRFLOW_WWW_USER_PASSWORD=${AIRFLOW_ADMIN_PASSWORD:-admin}
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ../data/input:/opt/airflow/data/input
+      - ../data/output:/opt/airflow/data/output
+    command: airflow webserver
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - e2e3d-network
+    restart: unless-stopped
+
+  airflow-scheduler:
+    image: ${DOCKER_REGISTRY:-localhost}/e2e3d-airflow:${IMAGE_TAG:-latest}
+    container_name: e2e3d-airflow-scheduler
+    depends_on:
+      airflow-webserver:
+        condition: service_healthy
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=CeleryExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD:-airflow}@postgres/${POSTGRES_DB:-airflow}
+      - AIRFLOW__CELERY__RESULT_BACKEND=db+postgresql://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD:-airflow}@postgres/${POSTGRES_DB:-airflow}
+      - AIRFLOW__CELERY__BROKER_URL=redis://redis:6379/0
+      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY:-}
+      - AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags
+      - AIRFLOW_HOME=/opt/airflow
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ../data/input:/opt/airflow/data/input
+      - ../data/output:/opt/airflow/data/output
+    command: airflow scheduler
+    networks:
+      - e2e3d-network
+    restart: unless-stopped
+
+  airflow-worker:
+    image: ${DOCKER_REGISTRY:-localhost}/e2e3d-airflow:${IMAGE_TAG:-latest}
+    container_name: e2e3d-airflow-worker
+    depends_on:
+      airflow-webserver:
+        condition: service_healthy
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=CeleryExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD:-airflow}@postgres/${POSTGRES_DB:-airflow}
+      - AIRFLOW__CELERY__RESULT_BACKEND=db+postgresql://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD:-airflow}@postgres/${POSTGRES_DB:-airflow}
+      - AIRFLOW__CELERY__BROKER_URL=redis://redis:6379/0
+      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY:-}
+      - AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags
+      - AIRFLOW_HOME=/opt/airflow
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ../data/input:/opt/airflow/data/input
+      - ../data/output:/opt/airflow/data/output
+    command: airflow celery worker
+    networks:
+      - e2e3d-network
+    restart: unless-stopped
+
+  airflow-init:
+    image: ${DOCKER_REGISTRY:-localhost}/e2e3d-airflow:${IMAGE_TAG:-latest}
+    container_name: e2e3d-airflow-init
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=CeleryExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD:-airflow}@postgres/${POSTGRES_DB:-airflow}
+      - AIRFLOW__CELERY__RESULT_BACKEND=db+postgresql://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD:-airflow}@postgres/${POSTGRES_DB:-airflow}
+      - AIRFLOW__CELERY__BROKER_URL=redis://redis:6379/0
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags
+      - AIRFLOW_HOME=/opt/airflow
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+    command: >
+      bash -c "
+        airflow db init &&
+        airflow db upgrade
+      "
+    networks:
+      - e2e3d-network
+
+  #--------------------------------------------------
+  # Reconstruction Service
+  #--------------------------------------------------
+  reconstruction-service:
+    image: ${DOCKER_REGISTRY:-localhost}/e2e3d-reconstruction:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: production/Dockerfile.reconstruction
+    container_name: e2e3d-reconstruction-service
+    restart: unless-stopped
+    environment:
+      - USE_GPU=${USE_GPU:-false}
+      - MAX_WORKERS=${MAX_WORKERS:-4}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - ENABLE_METRICS=${ENABLE_METRICS:-true}
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - ../data/input:/app/data/input
+      - ../data/output:/app/data/output
+      - ./logs:/app/logs
+    depends_on:
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "/app/scripts/healthcheck.py"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    ports:
+      - "5001:5000"
+      - "9101:9101"
+    networks:
+      - e2e3d-network
+
+  #--------------------------------------------------
+  # Monitoring - Prometheus
+  #--------------------------------------------------
+  prometheus:
+    image: prom/prometheus:v2.42.0
+    container_name: e2e3d-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    networks:
+      - e2e3d-network
+
+  #--------------------------------------------------
+  # Monitoring - Grafana
+  #--------------------------------------------------
+  grafana:
+    image: grafana/grafana:9.4.7
+    container_name: e2e3d-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./config/grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+    networks:
+      - e2e3d-network
+
+  #--------------------------------------------------
+  # API Gateway and Web UI - NGINX
+  #--------------------------------------------------
+  nginx:
+    image: nginx:1.23.3-alpine
+    container_name: e2e3d-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./config/nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./config/nginx/conf.d:/etc/nginx/conf.d
+      - ../data/output:/usr/share/nginx/html/output
+    depends_on:
+      - reconstruction-service
+      - airflow-webserver
+      - minio
+      - grafana
+      - prometheus
+    networks:
+      - e2e3d-network
+
+networks:
+  e2e3d-network:
+    driver: bridge
+
+volumes:
+  minio-data:
+  postgres-data:
+  prometheus-data:
+  grafana-data: 

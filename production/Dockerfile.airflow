@@ -1,0 +1,56 @@
+FROM apache/airflow:2.5.3-python3.7
+
+USER root
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    ffmpeg \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
+    libxrender1 \
+    libxext6 \
+    git \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+USER airflow
+
+# Install pip and numpy first to avoid compilation issues
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir numpy==1.21.6
+
+# Install Python dependencies
+COPY requirements-minimal.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt && \
+    # Install additional packages for Airflow
+    pip install --no-cache-dir \
+    apache-airflow-providers-amazon==5.1.0 \
+    apache-airflow-providers-http==2.0.1 \
+    apache-airflow-providers-ssh==2.1.0 \
+    pillow==9.5.0 \
+    opencv-python-headless==4.7.0.72 \
+    minio==7.1.15 \
+    boto3==1.28.0
+
+# Copy the DAG files
+COPY production/dags/* /opt/airflow/dags/
+
+# Copy scripts
+COPY production/scripts/reconstruct.py /opt/airflow/scripts/reconstruct.py
+COPY production/scripts/upload_to_minio.py /opt/airflow/scripts/upload_to_minio.py
+
+# Create directories
+USER root
+RUN mkdir -p /opt/airflow/data/input /opt/airflow/data/output && \
+    chown -R airflow /opt/airflow/data
+
+# Create entrypoint script for custom database initialization
+COPY production/scripts/airflow-init.sh /opt/airflow/scripts/airflow-init.sh
+RUN chmod +x /opt/airflow/scripts/airflow-init.sh
+
+USER airflow
+
+WORKDIR /opt/airflow 
